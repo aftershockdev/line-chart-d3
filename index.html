@@ -1,0 +1,185 @@
+<!-- Code from d3-graph-gallery.com -->
+<!DOCTYPE html>
+<meta charset="utf-8" />
+
+<script src="https://d3js.org/d3.v4.js"></script>
+
+<body>
+  <div class="main" style="margin: 100px auto; width: 1300px"></div>
+
+  <script>
+    class LineChart {
+      constructor() {}
+
+      createChart() {
+        let margin = { top: 10, right: 30, bottom: 30, left: 60 },
+          width = 1300 - margin.left - margin.right,
+          height = 800 - margin.top - margin.bottom;
+
+        let dateFormatter = d3.timeFormat("%Y/%m/%d");
+
+        let svg = d3
+          .select(".main")
+          .style("background-color", "rgba(0, 0, 0, 0.05)")
+          .style("border-radius", "10px")
+          .append("svg")
+          .attr("width", width + margin.left + margin.right)
+          .attr("height", height + margin.top + margin.bottom)
+          .style("overflow", "visible")
+          .append("g")
+          .attr(
+            "transform",
+            "translate(" + margin.left + "," + margin.top + ")"
+          );
+
+        d3.csv(
+          "https://raw.githubusercontent.com/holtzy/data_to_viz/master/Example_dataset/3_TwoNumOrdered_comma.csv",
+          function (d) {
+            return { date: d3.timeParse("%Y-%m-%d")(d.date), value: d.value };
+          },
+          function (data) {
+            let bisectDate = d3.bisector((d) => d.date).left;
+
+            let x = d3
+              .scaleTime()
+              .domain(d3.extent(data, (d) => d.date))
+              .range([0, width]);
+
+            let xAxis = svg
+              .append("g")
+              .attr("transform", "translate(0," + height + ")")
+              .call(d3.axisBottom(x));
+
+            let y = d3
+              .scaleLinear()
+              .domain([0, d3.max(data, (d) => +d.value)])
+              .range([height, 0]);
+
+            let yAxis = svg.append("g").call(d3.axisLeft(y));
+
+            let clip = svg
+              .append("defs")
+              .append("svg:clipPath")
+              .attr("id", "clip")
+              .append("svg:rect")
+              .attr("width", width)
+              .attr("height", height)
+              .attr("x", 0)
+              .attr("y", 0);
+
+            let brush = d3
+              .brushX()
+              .extent([
+                [0, 0],
+                [width, height],
+              ])
+              .on("end", updateChart);
+
+            let area = svg.append("g").attr("clip-path", "url(#clip)");
+
+            let areaGenerator = d3
+              .area()
+              .x((d) => x(d.date))
+              .y0(y(0))
+              .y1((d) => y(d.value));
+
+            let focus = svg
+              .append("g")
+              .attr("class", "focus")
+              .style("display", "none");
+
+            let idleTimeout;
+
+            area
+              .append("path")
+              .datum(data)
+              .attr("class", "myArea")
+              .attr("fill", "red")
+              .attr("fill-opacity", 0.3)
+              .attr("stroke", "grey")
+              .attr("stroke-width", 1)
+              .attr("d", areaGenerator);
+
+            area.append("g").attr("class", "brush").call(brush);
+
+            focus.append("circle").attr("r", 4).attr("fill", "grey");
+
+            focus
+              .append("rect")
+              .attr("class", "tooltip")
+              .attr("width", 100)
+              .attr("height", 50)
+              .attr("fill", "grey")
+              .attr("x", 10)
+              .attr("y", -22)
+              .attr("rx", 4)
+              .attr("ry", 4);
+
+            focus
+              .append("text")
+              .attr("class", "tooltip-date")
+              .attr("x", 30)
+              .attr("y", 20);
+
+            focus
+              .append("text")
+              .attr("class", "tooltip-likes")
+              .attr("x", 30)
+              .attr("y", 0);
+
+            function mousemove() {
+              let x0 = x.invert(d3.mouse(this)[0]),
+                i = bisectDate(data, x0, 1),
+                d0 = data[i - 1],
+                d1 = data[i],
+                d = x0 - d0.date > d1.date - x0 ? d1 : d0;
+              focus.attr(
+                "transform",
+                "translate(" + x(d.date) + "," + y(d.value) + ")"
+              );
+              focus.select(".tooltip-date").text(dateFormatter(d.date));
+              focus.select(".tooltip-likes").text(d.value + "$");
+            }
+
+            function idled() {
+              idleTimeout = null;
+            }
+
+            function updateChart() {
+              let extent = d3.event.selection;
+              if (!extent) {
+                if (!idleTimeout) return (idleTimeout = setTimeout(idled, 350));
+                x.domain([4, 8]);
+              } else {
+                x.domain([x.invert(extent[0]), x.invert(extent[1])]);
+                area.select(".brush").call(brush.move, null);
+              }
+              xAxis.transition().duration(1000).call(d3.axisBottom(x));
+              area
+                .select(".myArea")
+                .transition()
+                .duration(1000)
+                .attr("d", areaGenerator);
+            }
+
+            svg
+              .on("dblclick", function () {
+                x.domain(d3.extent(data, (d) => d.date));
+                xAxis.transition().call(d3.axisBottom(x));
+                area.select(".myArea").transition().attr("d", areaGenerator);
+              })
+              .on("mouseover", function () {
+                focus.style("display", null);
+              })
+              .on("mouseout", function () {
+                focus.style("display", "none");
+              })
+              .on("mousemove", mousemove);
+          }
+        );
+      }
+    }
+
+    let firstLineChart = new LineChart().createChart();
+  </script>
+</body>
